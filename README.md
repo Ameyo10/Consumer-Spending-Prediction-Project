@@ -1,96 +1,108 @@
-# 🧾 Consumer Spending Prediction Project
+---
 
-This project analyzes and predicts consumer spending using real-world economic data. It involves data visualization, preprocessing, model training and tuning, and finally, generating predictions on unseen data.
+## 🧠 Predicting Consumer Spending from State-wise Economic Data
+
+This project builds a machine learning pipeline to predict the **total spending** of consumers based on state-wise historical economic data. It includes **data visualization**, **outlier handling**, **model tuning**, and **final prediction** using the best model.
 
 ---
 
 ## 📁 Project Structure
 
-├── Data_Visualisation.py # Visualizes trends and patterns in consumer spending
-├── Tuning_model.py # Cleans data, performs outlier detection, tunes and selects the best model
-├── Prediction.py # Loads the trained model and predicts on test data
-├── Percent_Change_in_Consumer_Spending.csv # Source dataset used for training and visualization
-├── model_test_results.csv # Test dataset used for evaluating predictions
-├── total_spending.csv (optional) # Aggregated spending values (used in processing)
-├── LinearRegression_best_model.pkl # Trained model (or RandomForest depending on tuning outcome)
----
-
-## 🔍 Objective
-
-Predict the **total spending** of consumers in different sectors over time using machine learning models trained on historical data.
+```plaintext
+├── Data_Visualisation.py              # Visualizes trends in consumer spending
+├── Tuning_model.py                   # Handles outlier detection, model training & selection
+├── Prediction.py                     # Loads the trained model and predicts on test data
+├── Percent_Change_in_Consumer_Spending.csv   # Main dataset used for training and visualization
+├── model_test_results.csv            # Final test data with actual vs predicted spending
+├── LinearRegression_best_model.pkl   # Trained best model (generated at runtime)
+└── README.md                         # Project documentation
+```
 
 ---
 
-## 📊 Data Visualization
+## 📊 Data Description
 
-- File: `Data_Visualisation.py`
-- Reads from `Percent_Change_in_Consumer_Spending.csv`
-- Aggregates sector-wise spending over time and by state
-- Visualizes:
-  - Monthly spending trends
-  - Sector-wise contribution
-  - Total spending distribution by State FIPS codes
+* **Percent\_Change\_in\_Consumer\_Spending.csv** contains the percent change in spending across various sectors (like food, healthcare, entertainment) for different states over time.
+* A new column, **`total spending`**, is computed by summing spending across all major sectors.
 
 ---
 
-## ⚙️ Model Tuning and Training
+## ⚙️ How the Pipeline Works
 
-- File: `Tuning_model.py`
-- Steps:
-  1. **Outlier Removal** using One-Class SVM (on scaled numeric features)
-  2. **TimeSeriesSplit** for time-aware cross-validation
-  3. **Model Comparison**: Random Forest vs Linear Regression
-  4. **Best Model Selection** based on Mean Absolute Percentage Error (MAPE)
-  5. **Model Saving** via `joblib.dump()`
+### 1. `Data_Visualisation.py`
 
----
+* Groups and plots monthly spending trends across different categories.
+* Helps identify key patterns, such as peaks, declines, or seasonal fluctuations.
 
-## 🤖 Making Predictions
+### 2. `Tuning_model.py`
 
-- File: `Prediction.py`
-- Loads `model_test_results.csv` (containing test features and actual spending)
-- Loads the best model using `joblib.load()`
-- Re-predicts total spending and evaluates accuracy using MAPE
+* **Selects numeric features** and removes outliers using `OneClassSVM`.
+* Applies **feature scaling** using `StandardScaler`.
+* Splits the dataset using **TimeSeriesSplit** with a gap to avoid leakage.
+* Compares `RandomForestRegressor` and `LinearRegression` using **MAPE**.
+* Saves the **best-performing model** (`.pkl` file) for later use.
 
----
+### 3. `Prediction.py`
 
-## 📈 Dataset Info
-
-- `Percent_Change_in_Consumer_Spending.csv`: Contains consumer spending changes across different sectors and states.
-- Target Column: **`total spending`** — derived as the sum of multiple sectoral spending columns.
-- Features include:
-  - Date
-  - State codes
-  - Sectoral percent change values
+* Loads `model_test_results.csv`, which contains features, actual spending, and original model predictions.
+* Reloads the trained model (`.pkl`).
+* Recomputes predictions and compares them with the actual values using **MAPE**.
 
 ---
 
-## ✅ Requirements
+## ✅ How to Use
 
-- Python 3.8+
-- Libraries:
-  - pandas
-  - matplotlib
-  - scikit-learn
-  - joblib
+### 🔧 1. Prepare the Environment
 
-Install via:
-pip install pandas matplotlib scikit-learn joblib
-🚀 How to Run
-Run the data visualization:
+```bash
+pip install pandas scikit-learn matplotlib joblib
+```
 
+### 📈 2. Visualize the Data
+
+```bash
 python Data_Visualisation.py
-Train and save the best model:
+```
 
+### 🤖 3. Train and Tune Models
+
+```bash
 python Tuning_model.py
-Evaluate the model on test data:
+```
 
+* This will generate and save `RandomForest_best_model.pkl` or `LinearRegression_best_model.pkl`.
+
+### 🧪 4. Predict and Evaluate
+
+```bash
 python Prediction.py
+```
 
+---
 
-All model evaluation uses MAPE for interpretability.
+## 📄 Output
 
-Code paths assume local CSV and model file access — adjust if running in a different environment.
+* **`model_test_results.csv`** contains:
 
-🧠 Author
-Developed by Ameyo Jha — a student passionate about data science and economic forecasting.
+  * Input features
+  * Date
+  * Actual total spending
+  * Predicted spending
+* You can use this file to evaluate your model or visualize accuracy.
+
+---
+
+## 📝 Future Improvements
+
+* Add support for more models (e.g., XGBoost, SVR)
+* Perform hyperparameter optimization using `GridSearchCV`
+* Incorporate external economic indicators or news sentiment
+* Add model interpretability tools (e.g., SHAP)
+
+---
+
+## 🧠 Author
+
+*Project developed by Ameyo Jha as part of a consumer spending prediction analysis pipeline.*
+
+---

@@ -1,0 +1,689 @@
+To eliminate (i.e. remove) the outliers using One-Class SVM in your existing code, follow these steps:
+
+---
+
+### ✅ **Goal**: After fitting the One-Class SVM, identify the inliers, then plot only those.
+
+The key is this line:
+
+```python
+estimator.fit(X)
+```
+
+After fitting, we can use:
+
+```python
+pred = estimator.predict(X)
+```
+
+* `+1` indicates **inliers**
+* `-1` indicates **outliers**
+
+---
+
+### ✅ **Steps to Modify the Code**
+
+Below is the modified snippet **just for One-Class SVM**, so that it:
+
+1. Detects outliers
+2. Removes them from the dataset
+3. Plots only the inliers
+
+Modify the loop like this (for both examples if needed):
+
+```python
+for color, (name, estimator) in zip(colors, estimators.items()):
+    estimator.fit(X)
+    
+    if name == "OCSVM":
+        pred = estimator.predict(X)
+        inliers = X[pred == 1]
+        
+        DecisionBoundaryDisplay.from_estimator(
+            estimator,
+            X,
+            response_method="decision_function",
+            plot_method="contour",
+            levels=[0],
+            colors=color,
+            ax=ax,
+        )
+        # Plot only inliers
+        ax.scatter(inliers[:, 0], inliers[:, 1], color="black", label=f"{name} inliers")
+    else:
+        DecisionBoundaryDisplay.from_estimator(
+            estimator,
+            X,
+            response_method="decision_function",
+            plot_method="contour",
+            levels=[0],
+            colors=color,
+            ax=ax,
+        )
+        ax.scatter(X[:, 0], X[:, 1], color="gray", alpha=0.3)  # Optional: show full data for others
+```
+
+---
+
+### ✅ Optional: Save or Analyze Inliers
+
+You can also save the cleaned data (after removing outliers) for later use:
+
+```python
+X_cleaned = X[pred == 1]
+```
+
+---
+
+Would you like me to edit the full script and return it with this update for both examples?
+
+--------------------------------------------------------------------------------------------------------------------------------------
+
+In **Polars**, the method `.drop()` works differently from **Pandas**. It is **simpler and more consistent** — you don't need to specify `axis=1`.
+
+---
+
+### ✅ In **Polars**:
+
+To drop a column from a `pl.DataFrame`, you just pass the column name(s) directly.
+
+#### **Syntax:**
+
+```python
+df = df.drop("column_name")  # drops one column
+```
+
+```python
+df = df.drop(["col1", "col2"])  # drops multiple columns
+```
+
+* No need for `axis=1` (Polars always treats strings in `drop()` as **column names**).
+
+---
+
+### 🆚 Compared to **Pandas**:
+
+```python
+df = df.drop("column_name", axis=1)  # Required in pandas to indicate 'column' not 'row'
+```
+
+---
+
+### ✅ Example in Polars:
+
+```python
+import polars as pl
+
+df = pl.DataFrame({
+    "a": [1, 2, 3],
+    "b": [4, 5, 6],
+    "c": [7, 8, 9]
+})
+
+df_cleaned = df.drop("b")
+print(df_cleaned)
+```
+
+**Output:**
+
+```
+shape: (3, 2)
+┌─────┬─────┐
+│ a   │ c   │
+│ --- │ --- │
+│ i64 │ i64 │
+├─────┼─────┤
+│ 1   │ 7   │
+│ 2   │ 8   │
+│ 3   │ 9   │
+└─────┴─────┘
+```
+
+---
+
+Let me know if you want to drop rows instead — the syntax is different.
+
+--------------------------------------------------------------------------------------------------------------------------------------
+
+You're almost there. Since `date = X['date']` was saved **before** you dropped non-numeric columns, you just need to:
+
+1. Filter the `date` Series using the same mask (`pred == 1`).
+2. Reconstruct the final DataFrame by concatenating `refined_X` and the filtered `date` column.
+
+---
+
+### ✅ Here's the corrected and complete version:
+
+```python
+import polars as pl
+from sklearn.svm import OneClassSVM
+
+# Drop target column
+X = data.drop("total spending")
+y = data["total spending"]
+
+# Extract date column before removing non-numeric columns
+date = X["date"]
+
+# One-Class SVM
+OCSVM = OneClassSVM(nu=0.05, gamma=0.25)
+
+# Keep only numeric columns
+X_numeric = X.select(pl.col(pl.NUMERIC_DTYPES))
+OCSVM.fit(X_numeric)
+
+# Predict inliers (+1) and outliers (-1)
+pred = OCSVM.predict(X_numeric)
+
+# Create a mask as a boolean list
+mask = pred == 1
+
+# Filter both X_numeric and date using the mask
+refined_X = X_numeric.filter(mask)
+refined_date = date.filter(mask)
+
+# Add the date column back
+final_df = refined_X.with_columns(date=refined_date)
+
+# Output sizes
+print(len(X_numeric))
+print(len(final_df))
+```
+
+---
+
+### ✅ Explanation:
+
+* `date.filter(mask)` retains only the dates for inlier rows.
+* `refined_X.with_columns(date=...)` appends the filtered date column back.
+* No row indices are needed — Polars keeps alignment if you use the same filtering logic.
+
+Let me know if you also want to keep the `y` values aligned with the inliers.
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+Yes, you're absolutely right.
+
+To align the `y` values (i.e., the `"total spending"` column) with the inliers identified by the One-Class SVM, you should use:
+
+```python
+refined_y = y.filter(mask)
+```
+
+This works because:
+
+* `y` is a Polars `Series`
+* `mask` is a NumPy array of boolean values (`pred == 1`)
+* Polars can apply the NumPy boolean array as a mask
+
+---
+
+### ✅ Final Combined Version:
+
+```python
+import polars as pl
+from sklearn.svm import OneClassSVM
+
+# Drop the target and extract necessary columns
+X = data.drop("total spending")
+y = data["total spending"]
+date = X["date"]
+
+# Fit OCSVM on numeric features
+X_numeric = X.select(pl.col(pl.NUMERIC_DTYPES))
+OCSVM = OneClassSVM(nu=0.05, gamma=0.25)
+OCSVM.fit(X_numeric)
+pred = OCSVM.predict(X_numeric)
+mask = pred == 1
+
+# Filter numeric features, date, and y based on inliers
+refined_X = X_numeric.filter(mask)
+refined_date = date.filter(mask)
+refined_y = y.filter(mask)
+
+# Add date back to refined_X
+final_df = refined_X.with_columns(date=refined_date)
+
+# (Optional) Add y back if needed
+final_df = final_df.with_columns(total_spending=refined_y)
+
+print(len(X_numeric))     # Before
+print(len(final_df))      # After
+```
+
+---
+
+Now, `final_df` contains:
+
+* Only inliers (rows for which `OCSVM.predict == 1`)
+* The original date column
+* The aligned target column (`total spending`)
+
+Let me know if you want to save this cleaned DataFrame or use it for further ML tasks.
+
+------------------------------------------------------------------------------------------------------------------------------------
+
+Yes — in **Polars**, the expression:
+
+```python
+df = df.with_columns(date = refined_date)
+```
+
+will **add or replace** the `"date"` column in `df` using the values from `refined_date`.
+
+---
+
+### ✅ How It Works:
+
+* If `refined_date` is a `pl.Series` of the **same length** as the number of rows in `df`, it will be added as a column named `"date"`.
+* If a column named `"date"` already exists, it will be **overwritten**.
+
+---
+
+### ✅ Equivalent (and more explicit) alternative:
+
+```python
+df = df.with_columns([refined_date.alias("date")])
+```
+
+Both are valid. Use the `alias()` form if you want to be sure what name the column will have when added.
+
+---
+
+### ⚠️ Important:
+
+The number of rows in `refined_date` **must exactly match** the number of rows in `df`. Since you filtered both using the same `mask`, this condition is satisfied.
+
+---
+
+Let me know if you'd also like to convert this Polars DataFrame into a Pandas DataFrame or save it to CSV.
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+Great question — let's break it down thoroughly:
+
+---
+
+### 🔍 Line:
+
+```python
+all_splits = list(ts_cv.split(final_X, refined_y))
+```
+
+### ❓ What this does:
+
+It generates and stores **a list of train-test index splits** from **time series cross-validation** using `TimeSeriesSplit` (or similar) over a **feature matrix (`final_X`)** and **target vector (`refined_y`)**.
+
+---
+
+### 🧠 Internals:
+
+`ts_cv.split(X, y)` is a generator that yields tuples of indices:
+
+```python
+(train_indices, test_indices)
+```
+
+These indices are **row positions**, not the actual data. You can use them to subset `X` and `y` like:
+
+```python
+X_train, X_test = final_X[train_indices], final_X[test_indices]
+y_train, y_test = refined_y[train_indices], refined_y[test_indices]
+```
+
+---
+
+### ✅ Example:
+
+Suppose:
+
+```python
+final_X.shape = (10, 3)  # 10 rows, 3 columns
+refined_y.shape = (10,)
+```
+
+and you use:
+
+```python
+from sklearn.model_selection import TimeSeriesSplit
+
+ts_cv = TimeSeriesSplit(n_splits=3)
+all_splits = list(ts_cv.split(final_X, refined_y))
+```
+
+Now `all_splits` might contain something like:
+
+```python
+[
+  (array([0, 1, 2]), array([3])),
+  (array([0, 1, 2, 3]), array([4])),
+  (array([0, 1, 2, 3, 4]), array([5]))
+]
+```
+
+Each item is a `(train_index, test_index)` tuple. These are **positions**, so if you index `final_X` like:
+
+```python
+train_X, test_X = final_X[train_idx], final_X[test_idx]
+```
+
+You’ll get train-test splits **with multiple columns** (as expected, since `final_X` has multiple features).
+
+---
+
+### 💡 Why use `list()`?
+
+Because `.split()` is a generator — calling `list()` turns it into a reusable list of splits.
+
+---
+
+### 🔁 Recap:
+
+* `final_X`: Feature matrix (e.g., shape `[n_samples, n_features]`)
+* `refined_y`: Target vector (e.g., shape `[n_samples]`)
+* `ts_cv.split(...)`: yields index pairs
+* `list(...)`: captures all splits in memory
+* You use each `(train_idx, test_idx)` to index both `final_X` and `refined_y` during training
+
+---
+
+Would you like a working code demo with dummy data to visualize this in action?
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+You're facing **two separate issues** — let's resolve both:
+
+---
+
+## ✅ **Issue 1: `NUMERIC_DTYPES` is deprecated**
+
+### 🔴 Error:
+
+```python
+DeprecationWarning: `NUMERIC_DTYPES` is deprecated
+```
+
+### ✅ Fix:
+
+Replace:
+
+```python
+X_numeric = X.select(pl.col(pl.NUMERIC_DTYPES))
+```
+
+With:
+
+```python
+from polars.selectors import numeric
+
+X_numeric = X.select(numeric())
+```
+
+This uses the **official, future-proof way** to select numeric columns in Polars.
+
+---
+
+## ✅ **Issue 2: `TypeError: numpy.float64 object cannot be interpreted as an integer`**
+
+### 🔴 Error:
+
+```python
+test_starts = range(n_samples - n_splits * test_size, n_samples, test_size)
+TypeError: 'numpy.float64' object cannot be interpreted as an integer
+```
+
+### 🔍 Why this happens:
+
+You likely passed a **float** as `test_size` to `TimeSeriesSplit` — but `TimeSeriesSplit` expects **`n_splits` as an int**, not `test_size`.
+
+### ✅ Fix:
+
+Make sure you are using `TimeSeriesSplit` like this:
+
+```python
+from sklearn.model_selection import TimeSeriesSplit
+
+ts_cv = TimeSeriesSplit(n_splits=5)  # 5 is an integer
+```
+
+Do **NOT** pass `test_size=0.2` — that’s valid in other splitters like `train_test_split` but **not** in `TimeSeriesSplit`.
+
+---
+
+## ✅ Final Fixed Version Snippet:
+
+```python
+from sklearn.model_selection import TimeSeriesSplit
+from polars.selectors import numeric
+
+X_numeric = X.select(numeric())  # ✅ no deprecation warning
+refined_y = y.filter(mask)
+
+ts_cv = TimeSeriesSplit(n_splits=5)  # ✅ must be an integer
+all_splits = list(ts_cv.split(X_numeric, refined_y))
+```
+
+---
+
+Let me know if you want to plot or use these splits for model training now.
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+You've built a solid first version of your time-series prediction model, including outlier filtering, cross-validation, and model training. Now, let’s go over your assumptions and improvement areas in detail.
+
+---
+
+## ✅ Your Assumptions & Observations
+
+### 1. **“Maybe Linear Regression would have been better than Random Forest”**
+
+→ **You're partially right**, and here’s when and why:
+
+* If your features have **linear relationships** with the target, **Linear Regression** is simpler, more interpretable, and faster.
+* If you **only have a few features**, it’s wise to **try linear models first** before moving to complex ones like Random Forest.
+* **Random Forest** handles nonlinearity well, but **can overfit** and is **harder to interpret**.
+
+➡️ **Suggestion**: Try `LinearRegression` and `Ridge`, compare with `RandomForestRegressor`.
+
+---
+
+### 2. **“I don’t need PCA or feature selection since there are only a few features”**
+
+✅ Yes, you're right. PCA is useful for:
+
+* Dimensionality reduction when you have **dozens or hundreds** of features.
+* Removing multicollinearity in high-dim data.
+
+Here, with **few columns**, PCA will **add unnecessary complexity**.
+
+➡️ **No need for PCA** unless:
+
+* Features are extremely correlated (you can check this using a correlation heatmap).
+
+---
+
+### 3. **“Do I need to scale the features?”**
+
+* **For Random Forest**: ❌ No need — it's **scale-invariant**.
+* **For Linear Regression**: ✅ Yes — scaling improves numerical stability and convergence.
+* **For One-Class SVM**: ✅ Definitely — it **requires scaling**, especially if features vary in scale.
+
+➡️ **In your case**:
+
+* **You commented out `StandardScaler`**, but you're using **OneClassSVM** → This **can distort the outlier detection** since OCSVM is sensitive to feature magnitude.
+
+---
+
+## 🔍 Key Issues in Your Script
+
+### ❌ `max_train_size` and `test_size` use `np.abs(float)` → causes error
+
+As seen in your earlier message:
+
+```python
+test_size=np.abs(0.25*len(final_X))  # This becomes float
+```
+
+✅ Fix:
+
+```python
+test_size = int(0.25 * len(final_X))
+max_train_size = int(0.75 * len(final_X))
+```
+
+---
+
+### ❌ OneClassSVM was used **without scaling**
+
+As discussed, use `StandardScaler` from `sklearn.preprocessing`:
+
+```python
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_numeric)
+OCSVM.fit(X_scaled)
+pred = OCSVM.predict(X_scaled)
+```
+
+You’ll need to wrap `X_scaled` back into a Polars DataFrame before further filtering.
+
+---
+
+### ❌ Small mistake in `y_test = y[test_idx]`
+
+You're using `refined_y` for `y_train`, but then `y` (unfiltered) for `y_test`. This breaks alignment.
+
+✅ Fix:
+
+```python
+y_test = refined_y[test_idx]
+```
+
+---
+
+## ✅ Recommended Improvements (Summarized)
+
+| Area              | Current                    | Recommendation                                              |
+| ----------------- | -------------------------- | ----------------------------------------------------------- |
+| Model             | `RandomForestRegressor`    | Also try `LinearRegression`, `Ridge`                        |
+| Scaling           | Not applied                | Apply `StandardScaler` before OneClassSVM and Linear models |
+| Feature selection | None                       | Correct – not needed for few features                       |
+| Outlier detection | `OneClassSVM`              | Keep, but apply **after scaling**                           |
+| TimeSeriesSplit   | `test_size=float`          | Use `int()` to avoid type error                             |
+| Target alignment  | Mixing `y` and `refined_y` | Use only `refined_y` after filtering                        |
+
+---
+
+Would you like me to rewrite and clean up the full script for you with all the fixes and improvements applied?
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Here is your **improved and corrected Python script** for predicting total spending, with the following enhancements:
+
+---
+
+### ✅ Improvements Applied:
+
+* Scales features using `StandardScaler` before using `OneClassSVM`
+* Applies `OneClassSVM` correctly to detect and remove outliers
+* Uses `refined_y` consistently
+* Fixes the `TimeSeriesSplit` issue (`test_size` and `max_train_size` must be integers)
+* Tests **both Random Forest and Linear Regression**
+* Does not apply unnecessary PCA or feature selection
+* Cleaned and clearly commented
+
+---
+
+### 🧾 Final Script:
+
+```python
+import polars as pl
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.svm import OneClassSVM
+from sklearn.metrics import mean_absolute_percentage_error
+from polars.selectors import numeric
+
+# Load the CSV data
+data = pl.read_csv(
+    r'D:\Python Projects\Learning\Machine Learning\Solving problem\Spendings\Percent_Change_in_Consumer_Spending.csv'
+)
+
+# Drop target column and extract date
+X = data.drop("total spending")
+y = data["total spending"]
+date = X["Date"]
+
+# Select numeric features
+X_numeric = X.select(numeric())
+
+# Scale the features before applying One-Class SVM
+scaler = StandardScaler()
+X_scaled_np = scaler.fit_transform(X_numeric.to_numpy())
+OCSVM = OneClassSVM(nu=0.05, gamma=0.25)
+OCSVM.fit(X_scaled_np)
+pred = OCSVM.predict(X_scaled_np)
+mask = pred == 1  # +1 = inlier, -1 = outlier
+
+# Filter data based on inliers
+refined_X_np = X_scaled_np[mask]
+refined_y = y.filter(mask)
+refined_date = date.filter(mask)
+
+# Convert scaled NumPy array back to Polars DataFrame with original column names
+refined_X = pl.DataFrame(refined_X_np, schema=X_numeric.columns)
+final_X = refined_X.with_columns(Date=refined_date)
+
+# Setup time series cross-validation
+n_samples = len(final_X)
+ts_cv = TimeSeriesSplit(
+    n_splits=3,
+    gap=360,
+    max_train_size=int(0.75 * n_samples),
+    test_size=int(0.25 * n_samples)
+)
+
+# Get the first split
+all_splits = list(ts_cv.split(refined_X_np, refined_y))
+train_idx, test_idx = all_splits[0]
+
+X_train, X_test = refined_X_np[train_idx], refined_X_np[test_idx]
+y_train, y_test = refined_y[train_idx], refined_y[test_idx]
+
+# Train Random Forest Regressor
+rf_model = RandomForestRegressor(n_estimators=100, criterion='squared_error', min_samples_split=2)
+rf_model.fit(X_train, y_train)
+rf_preds = rf_model.predict(X_test)
+rf_mape = mean_absolute_percentage_error(y_test, rf_preds)
+print(f"Random Forest MAPE: {rf_mape:.4f}")
+
+# Train Linear Regression for comparison
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
+lr_preds = lr_model.predict(X_test)
+lr_mape = mean_absolute_percentage_error(y_test, lr_preds)
+print(f"Linear Regression MAPE: {lr_mape:.4f}")
+```
+
+---
+
+### 🧪 Next Steps:
+
+* Review the MAPE for both models and choose the better one.
+* If needed, test Ridge regression (`from sklearn.linear_model import Ridge`).
+* You can also expand the script to loop over all `ts_cv` splits for robust evaluation.
+
+Let me know if you'd like to add:
+
+* Model saving
+* Feature importance plots
+* CSV export of predictions or cleaned data
+
+I'm happy to help with the next steps.
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
